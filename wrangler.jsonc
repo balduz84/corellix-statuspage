@@ -1,0 +1,79 @@
+{
+  // Cloudflare account ID - uncomment and set for deployment
+  // "account_id": "",
+
+  // Worker name
+  "name": "corellix-statuspage",
+
+  // Entry point for the Worker
+  "main": "./src/worker/index.ts",
+
+  // Compatibility date for Cloudflare Workers runtime
+  "compatibility_date": "2026-02-28",
+
+  // Enable workers.dev subdomain (no custom domain configured yet)
+  "workers_dev": true,
+
+  // Uncomment and adjust once you assign a custom domain in the Cloudflare dashboard
+  // "routes": [
+  //   {
+  //     "pattern": "status.corellix.io",
+  //     "custom_domain": true
+  //   }
+  // ],
+
+  // KV namespace bindings - replace with the ID from your own
+  // `npx wrangler kv namespace create KV_STORE` (see README Quick Start)
+  "kv_namespaces": [
+    {
+      "binding": "KV_STORE",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // Static assets configuration
+  "site": {
+    "bucket": "./dist/client"
+  },
+
+  // Development server settings
+  "dev": {
+    "port": 3000
+  },
+
+  // Observability and logging configuration
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "invocation_logs": true
+    }
+  },
+
+  // Production environment configuration
+  "env": {
+    "production": {
+      "kv_namespaces": [
+        {
+          "binding": "KV_STORE",
+          "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+        }
+      ],
+      "triggers": {
+        "crons": [
+          // Check monitors every 30 minutes
+          // https://crontab.guru/#*/30_*_*_*_*
+          "*/30 * * * *",
+
+          // Update remote csv monitors every 10 minutes (disabled)
+          // https://crontab.guru/#*/10_*_*_*_*
+          // "*/10 * * * *",
+
+          // Clear old data in KV every Sunday at 4:05 AM
+          // https://crontab.guru/#5_4_*_*_sun
+          "17 15 * * sun"
+        ]
+      }
+    }
+  }
+}

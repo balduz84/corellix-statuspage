@@ -1,170 +1,395 @@
-# Cloudflare Worker - Status Page
+# Corellix Status Page
 
-Monitor your websites, showcase status including daily history, and get Slack notification whenever your website status changes. Using **Cloudflare Workers**, **CRON Triggers,** and **KV storage**. Check [my status page](https://status-page.eidam.dev) out! 🚀
+[![Deploy Status](https://github.com/balduz84/corellix-statuspage/actions/workflows/publish.yml/badge.svg)](https://github.com/balduz84/corellix-statuspage/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
 
-![Status Page](.gitbook/assets/status_page_screenshot.png)
+A powerful, serverless status page application built with **TypeScript** and **React**, running on **Cloudflare Workers**. Monitor your websites and APIs with automated health checks, historical uptime data, and instant notifications via Slack or Discord.
 
-![Slack notifications](.gitbook/assets/slack_screenshot.png)
+## 📋 Table of Contents
 
-## Pre-requisites
+- [Features](#-features)
+- [Prerequisites](#-prerequisites)
+- [Quick Start](#-quick-start)
+- [Configuration](#-configuration)
+- [Local Development](#-local-development)
+- [Deployment](#-deployment)
+- [Advanced Features](#-advanced-features)
+- [Workers KV Free Tier](#-workers-kv-free-tier)
+- [Known Issues](#-known-issues)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Acknowledgments](#-acknowledgments)
 
-You'll need a [Cloudflare Workers account](https://dash.cloudflare.com/sign-up/workers) with
+## ✨ Features
 
-- A workers domain set up
-- The Workers Bundled subscription \($5/mo\)
-  - [It works with Workers Free!](https://blog.cloudflare.com/workers-kv-free-tier/) Check [more info](#workers-kv-free-tier) on how to run on Workers Free.
-- Some websites/APIs to watch 🙂
+- **🦄 TypeScript First** - Fully typed for enhanced developer experience
+- **⚡ Serverless Architecture** - Built on Cloudflare Workers for global edge deployment
+- **📊 Historical Data** - Track uptime with configurable history (default: 90 days)
+- **🔔 Smart Notifications** - Instant alerts via Slack or Discord webhooks
+- **📈 Response Time Monitoring** - Collect and display response time metrics
+- **🌍 Remote CSV Monitors** - Import monitor configurations from Google Sheets
+- **🚀 Unlimited Monitors** - No artificial limits, even on Workers KV free tier
+- **♻️ Auto Cleanup** - Automatic garbage collection for KV storage optimization
+- **🎨 Modern UI** - React-based interface with Tailwind CSS and SSR via Vike
+- **⚙️ CRON Scheduling** - Automated health checks at customizable intervals
 
-Also, prepare the following secrets
+## 📦 Prerequisites
 
-- Cloudflare API token with `Edit Cloudflare Workers` permissions
-- Slack incoming webhook \(optional\)
-- Discord incoming webhook \(optional\)
+### Required
 
-## Getting started
+- **Node.js** (v20 or higher) and **pnpm** package manager
+- **[Cloudflare Workers Account](https://dash.cloudflare.com/sign-up/workers)**
+  - Workers domain configured
+  - Workers Bundled subscription ($5/month) *or* Free tier ([see limitations](#-workers-kv-free-tier))
+- **Cloudflare API Token** with `Edit Cloudflare Workers` permissions
+  - Create at: [Cloudflare Dashboard > My Profile > API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+  - Use the "Edit Cloudflare Workers" template
 
-You can either deploy with **Cloudflare Deploy Button** using GitHub Actions or deploy on your own.
+### Optional
 
-### Deploy with Cloudflare Deploy Button
+- **Slack Webhook URL** - For Slack notifications ([setup guide](https://api.slack.com/messaging/webhooks))
+- **Discord Webhook URL** - For Discord notifications ([setup guide](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks))
 
-[![Deploy to Cloudflare Workers](https://camo.githubusercontent.com/1f3d0b4d44a2c3f12c78bd02bae907169430e04d728006db9f97a4befa64c886/68747470733a2f2f6465706c6f792e776f726b6572732e636c6f7564666c6172652e636f6d2f627574746f6e3f706169643d74727565)](https://deploy.workers.cloudflare.com/?url=https://github.com/eidam/cf-workers-status-page)
+## 🚀 Quick Start
 
-1. Click the button and follow the instructions, you should end up with a clone of this repository
-2. Navigate to your new **GitHub repository &gt; Settings &gt; Secrets** and add the following secrets:
+### 1. Create Your Repository
 
-   ```yaml
-   - Name: CF_API_TOKEN (should be added automatically)
+Click the **"Use this template"** button at the top of this repository to create your own copy.
 
-   - Name: CF_ACCOUNT_ID (should be added automatically)
+### 2. Create KV Namespace
 
-   - Name: SECRET_SLACK_WEBHOOK_URL (optional)
-   - Value: your-slack-webhook-url
+Create a KV namespace in your Cloudflare account:
 
-   - Name: SECRET_DISCORD_WEBHOOK_URL (optional)
-   - Value: your-discord-webhook-url
+1. Go to [Cloudflare Dashboard > Workers & Pages > KV](https://dash.cloudflare.com/?to=/:account/workers/kv/namespaces)
+2. Click **"Create a namespace"**
+3. Name it `KV_STORE` (or any name you prefer)
+4. Copy the namespace ID
+5. Update [wrangler.jsonc](./wrangler.jsonc):
+   ```jsonc
+   "kv_namespaces": [{
+     "binding": "KV_STORE",
+     "id": "your-namespace-id-here"
+   }]
    ```
 
-3. Navigate to the **Actions** settings in your repository and enable them
-4. Edit [config.yaml](./config.yaml) to adjust configuration and list all of your websites/APIs you want to monitor
+### 3. Configure GitHub Secrets
 
-   ```yaml
-   settings:
-     title: 'Status Page'
-     url: 'https://status-page.eidam.dev' # used for Slack & Discord messages
-     logo: logo-192x192.png # image in ./public/ folder
-     daysInHistogram: 90 # number of days you want to display in histogram
-     collectResponseTimes: false # experimental feature, enable only for <5 monitors or on paid plans
+Navigate to your repository **Settings > Secrets and variables > Actions** and add:
 
-     # configurable texts across the status page
-     allmonitorsOperational: 'All Systems Operational'
-     notAllmonitorsOperational: 'Not All Systems Operational'
-     monitorLabelOperational: 'Operational'
-     monitorLabelNotOperational: 'Not Operational'
-     monitorLabelNoData: 'No data'
-     dayInHistogramNoData: 'No data'
-     dayInHistogramOperational: 'All good'
-     dayInHistogramNotOperational: 'Some checks failed'
+| Secret Name | Required | Description |
+|------------|----------|-------------|
+| `CLOUDFLARE_ACCOUNT_ID` | ✅ | Your Cloudflare account ID ([find it here](https://dash.cloudflare.com/)) |
+| `CLOUDFLARE_API_TOKEN` | ✅ | API token with Workers edit permissions |
+| `SECRET_SLACK_WEBHOOK_URL` | ❌ | Slack webhook for notifications |
+| `SECRET_DISCORD_WEBHOOK_URL` | ❌ | Discord webhook for notifications |
 
-   # list of monitors
-   monitors:
-     - id: workers-cloudflare-com # unique identifier
-       name: workers.cloudflare.com
-       description: 'You write code. They handle the rest.' # default=empty
-       url: 'https://workers.cloudflare.com/' # URL to fetch
-       method: GET # default=GET
-       expectStatus: 200 # operational status, default=200
-       followRedirect: false # should fetch follow redirects, default=false
-       linkable: false # should the titles be links to the service, default=true
+### 4. Configure Monitors
+
+Edit [src/config.ts](./src/config.ts) to customize your status page:
+
+```typescript
+export const config: Config = {
+  settings: {
+    title: 'My Status Page',
+    url: 'https://status.example.com/',
+    displayDays: 90,
+    collectResponseTimes: true,
+  },
+  monitors: [
+    {
+      id: 'example-website',
+      url: 'https://example.com/',
+      name: 'Example Website',
+      followRedirect: true,
+    },
+    // Add more monitors here
+  ],
+}
+```
+
+### 5. Deploy
+
+Push your changes to the `main` branch:
+
+```bash
+git add .
+git commit -m "Configure status page"
+git push origin main
+```
+
+GitHub Actions will automatically build and deploy your status page! 🎉
+
+### 6. Optional: Custom Domain
+
+1. Go to [Cloudflare Dashboard > Workers & Pages](https://dash.cloudflare.com/?to=/workers)
+2. Select your worker
+3. Go to **Settings > Triggers > Routes**
+4. Add a custom domain or route
+
+## ⚙️ Configuration
+
+### Monitor Configuration
+
+Each monitor in [src/config.ts](./src/config.ts) supports the following options:
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `id` | `string` | ✅ | Unique identifier for the monitor |
+| `url` | `string` | ✅ | URL to monitor |
+| `name` | `string` | ✅ | Display name for the monitor |
+| `followRedirect` | `boolean` | ✅ | Whether to follow HTTP redirects |
+
+### Settings Configuration
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `title` | `string` | - | Status page title |
+| `url` | `string` | - | Public URL of your status page |
+| `displayDays` | `number` | `90` | Number of days to display history |
+| `collectResponseTimes` | `boolean` | `true` | Whether to collect response times |
+
+### CRON Schedule
+
+Edit the cron schedule in [wrangler.jsonc](./wrangler.jsonc):
+
+```jsonc
+"env": {
+  "production": {
+    "triggers": {
+      "crons": [
+        "*/30 * * * *"  // Check every 30 minutes
+      ]
+    }
+  }
+}
+```
+
+Use [crontab.guru](https://crontab.guru/) to create custom schedules.
+
+## 💻 Local Development
+
+### Installation
+
+1. **Install pnpm** (if not already installed):
+   ```bash
+   npm install -g pnpm
    ```
 
-5. Push to `main` branch to trigger the deployment
-6. 🎉
-7. _\(optional\)_ Go to [Cloudflare Workers settings](https://dash.cloudflare.com/?to=/workers) and assign custom domain/route
-   - e.g. `status-page.eidam.dev/*` _\(make sure you include `/*` as the Worker also serve static files\)_
-8. _\(optional\)_ Edit [wrangler.toml](./wrangler.toml) to adjust Worker settings or CRON Trigger schedule, especially if you are on [Workers Free plan](#workers-kv-free-tier)
+2. **Clone and install dependencies**:
+   ```bash
+   git clone https://github.com/your-username/cf-workers-status-page-typescript.git
+   cd cf-workers-status-page-typescript
+   pnpm install
+   ```
 
-### Telegram notifications
+3. **Authenticate with Cloudflare**:
+   ```bash
+   npx wrangler login
+   ```
 
-To enable telegram notifications, you'll need to take a few additional steps.
+4. **Create KV namespace** (if not already created):
+   ```bash
+   npx wrangler kv:namespace create KV_STORE
+   ```
+   Copy the namespace ID to [wrangler.jsonc](./wrangler.jsonc).
 
-1. [Create a new Bot](https://core.telegram.org/bots#creating-a-new-bot)
-2. Set the api token you received when creating the bot as content of the `SECRET_TELEGRAM_API_TOKEN` secret in your github repository.
-3. Send a message to the bot from the telegram account which should receive the alerts (Something more than `/start`)
-4. Get the chat id with `curl https://api.telegram.org/bot<YOUR TELEGRAM API TOKEN>/getUpdates | jq '.result[0] .message .chat .id'`
-5. Set the retrieved chat id in the `SECRET_TELEGRAM_CHAT_ID` secret variable
-6. Redeploy the status page using the github action
+### Development Commands
 
-### Deploy on your own
+| Command | Description | Duration |
+|---------|-------------|----------|
+| `pnpm install` | Install dependencies | ~16s |
+| `pnpm run build` | Build the project | ~10s |
+| `pnpm run preview` | Build and preview locally at http://localhost:3000 | ~15s startup |
+| `pnpm run preview:production` | Preview in production mode | ~15s startup |
+| `pnpm run deploy` | Deploy to Cloudflare Workers | ~30s |
+| `pnpm run wrangler:types` | Generate TypeScript types from Wrangler | ~3s |
 
-You can clone the repository yourself and use Wrangler CLI to develop/deploy, extra list of things you need to take care of:
+### Important Notes
 
-- create KV namespace and add the `KV_STATUS_PAGE` binding to [wrangler.toml](./wrangler.toml)
-- create Worker secrets _\(optional\)_
-  - `SECRET_SLACK_WEBHOOK_URL`
-  - `SECRET_DISCORD_WEBHOOK_URL`
+- **✅ Use `pnpm run preview`** - This uses Wrangler dev mode which is fully functional
+- **Build required** - Changes require a full build to be reflected
+- **No hot reload** - Manual rebuild and restart needed for changes
 
-## Workers KV free tier
+### Development Server Removed
 
-The Workers Free plan includes limited KV usage, but the quota is sufficient for 2-minute checks only
+The Express-based local dev server (`dev-server/index.ts`) has been removed. It depended on the `express` devDependency, which had a reported security vulnerability, and was already non-functional due to an incompatibility with `path-to-regexp`. Use `pnpm run preview` (Wrangler dev mode) for local development.
 
-- Change the CRON trigger to 2 minutes interval (`crons = ["*/2 * * * *"]`) in [wrangler.toml](./wrangler.toml)
+### Dependency Management
 
-## Known issues
+**React Version Synchronization**: This project enforces that `react` and `react-dom` versions must always match. A preinstall hook automatically validates this before package installation to prevent version mismatches that could cause build or runtime issues.
 
-- **Max 25 monitors to watch in case you are using Slack notifications**, due to the limit of subrequests Cloudflare Worker can make \(50\).
+### Project Structure
 
-  The plan is to support up to 49 by sending only one Slack notification per scheduled run.
-
-- **KV replication lag** - You might get Slack notification instantly, however it may take couple of more seconds to see the change on your status page as [Cron Triggers are usually running on underutilized quiet hours machines](https://blog.cloudflare.com/introducing-cron-triggers-for-cloudflare-workers/#how-are-you-able-to-offer-this-feature-at-no-additional-cost).
-
-- **Initial delay (no data)** - It takes couple of minutes to schedule and run CRON Triggers for the first time
-
-## Future plans
-
-WIP - Support for Durable Objects - Cloudflare's product for low-latency coordination and consistent storage for the Workers platform. There is a working prototype, however, we are waiting for at least open beta.
-
-There is also a managed version of this project, currently in beta. Feel free to check it out https://statusflare.com (https://twitter.com/statusflare_com).
-
-## Running project locally
-**Requirements**
-- Linux or WSL
-- Yarn (`npm i -g yarn`)
-- Node 14+
-
-### Steps to get server up and running
-**Install wrangler**
 ```
-npm i -g wrangler
-```
-
-**Login With Wrangler to Cloudflare**
-```
-wrangler login
+cf-workers-status-page-typescript/
+├── src/
+│   ├── config.ts              # Main configuration file
+│   ├── worker/
+│   │   ├── index.ts           # Worker entry point
+│   │   ├── cron/              # Scheduled monitoring logic
+│   │   └── ssr/               # Server-side rendering
+│   ├── pages/                 # React page components
+│   └── components/            # Reusable React components
+├── wrangler.jsonc             # Cloudflare Worker config
+├── package.json               # Dependencies and scripts
+└── tsconfig.json              # TypeScript configuration
 ```
 
-**Create your KV namespace in cloudflare**
-```
-On the workers page navigate to KV, and create a namespace
+## 🚢 Deployment
+
+### Automatic Deployment (Recommended)
+
+The project uses GitHub Actions for automatic deployment:
+
+1. Push to the `main` branch
+2. GitHub Actions automatically builds and deploys
+3. Check deployment status in the Actions tab
+
+### Manual Deployment
+
+```bash
+pnpm run deploy
 ```
 
-**Update your wrangler.toml with**
-```
-kv-namespaces = [{binding="KV_STATUS_PAGE", id="<KV_ID>", preview_id="<KV_ID>"}]
-```
-_Note: you may need to change `kv-namespaces` to `kv_namespaces`_
+Ensure you have the following configured:
+- Cloudflare authentication (via `wrangler login`)
+- Correct account ID in `wrangler.jsonc` or environment variables
+- KV namespace created and configured
 
-**Install packages**
-```
-yarn install
+## 🎯 Advanced Features
+
+### Remote CSV Monitors
+
+You can import monitor configurations from a remote CSV file (e.g., Google Sheets):
+
+1. Create a Google Sheet using [this template](https://docs.google.com/spreadsheets/d/1eNhgeS0ElQGFeaVLNJwFWI8JW-Ppv158necdqASJ6TY/edit?usp=sharing)
+2. Publish it to the web: **File > Share > Publish to web**
+3. Select the specific sheet and choose **Comma-separated values (.csv)**
+4. Copy the URL and add it to [src/config.ts](./src/config.ts):
+   ```typescript
+   monitorsCsvUrl: 'https://docs.google.com/spreadsheets/d/e/YOUR_SHEET_ID/pub?output=csv'
+   ```
+5. Uncomment the CSV update cron trigger in [wrangler.jsonc](./wrangler.jsonc)
+
+### Response Time Collection
+
+Enable response time tracking in [src/config.ts](./src/config.ts):
+
+```typescript
+settings: {
+  collectResponseTimes: true,
+}
 ```
 
-**Create CSS**
+Response times are displayed on the status page for each monitor.
+
+### Notification Webhooks
+
+Add webhook URLs as secrets in GitHub repository settings or Cloudflare Workers environment variables:
+
+- **Slack**: `SECRET_SLACK_WEBHOOK_URL`
+- **Discord**: `SECRET_DISCORD_WEBHOOK_URL`
+
+Notifications are sent when a monitor's status changes (up ↔️ down).
+
+## 🆓 Workers KV Free Tier
+
+The Cloudflare Workers Free plan includes limited KV operations:
+- **Read operations**: 100,000 per day
+- **Write operations**: 1,000 per day
+- **Storage**: 1 GB
+
+**For free tier users**, adjust the monitoring frequency:
+
+1. Edit [wrangler.jsonc](./wrangler.jsonc):
+   ```jsonc
+   "crons": ["*/2 * * * *"]  // Check every 2 minutes instead of 30
+   ```
+
+2. Consider reducing the number of monitors or `displayDays` in config
+
+The default 30-minute interval works well with the Bundled plan ($5/month).
+
+**Reference**: [Cloudflare Workers KV Free Tier Announcement](https://blog.cloudflare.com/workers-kv-free-tier/)
+
+## ⚠️ Known Issues
+
+### KV Replication Lag
+- **Issue**: Notifications arrive instantly, but status page updates may lag by a few seconds
+- **Cause**: [CRON Triggers run on underutilized machines](https://blog.cloudflare.com/introducing-cron-triggers-for-cloudflare-workers/#how-are-you-able-to-offer-this-feature-at-no-additional-cost)
+- **Impact**: Minimal; typically resolves within seconds
+
+### Initial Delay (No Data)
+- **Issue**: Status page shows "No Data" immediately after deployment
+- **Cause**: CRON Triggers take a few minutes to initialize and run for the first time
+- **Solution**: Wait 2-5 minutes after deployment for first data collection
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit your changes**: `git commit -m 'Add amazing feature'`
+4. **Push to the branch**: `git push origin feature/amazing-feature`
+5. **Open a Pull Request**
+
+Please ensure your code:
+- Follows the existing TypeScript style
+- Includes appropriate type definitions
+- Has been tested locally with `pnpm run preview`
+- Doesn't break existing functionality
+
+### Reporting Issues
+
+Found a bug? Please [open an issue](https://github.com/balduz84/corellix-statuspage/issues) with:
+- A clear description of the problem
+- Steps to reproduce
+- Expected vs actual behavior
+- Your environment (Node version, OS, etc.)
+
+## 📄 License
+
+This project is licensed under the MIT License - see below for details:
+
 ```
-yarn run css
+MIT License
+
+Copyright (c) 2026 Matthew Lew
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
-**Run**
-```
-yarn run dev
-```
-_Note: If the styles do not come through try using `localhost:8787` instead of `localhost:8080`_
+## 🙏 Acknowledgments
+
+This project builds upon the excellent work of:
+
+- **[mdlew/cf-workers-status-page-typescript](https://github.com/mdlew/cf-workers-status-page-typescript)** - Direct source of this fork; modern TypeScript/Vike rewrite
+- **[yunsii/cf-worker-status-page-pro](https://github.com/yunsii/cf-worker-status-page-pro)** - Enhanced status page implementation
+- **[eidam/cf-workers-status-page](https://github.com/eidam/cf-workers-status-page)** - Original inspiration and concept
+- **[Vike](https://vike.dev/)** - SSR framework for React
+- **[Cloudflare Workers](https://workers.cloudflare.com/)** - Serverless platform
+
+Special thanks to the open-source community for making projects like this possible! 💙
+
+---
+
+**Made with ❤️ using Cloudflare Workers, React, and TypeScript**
+
+[⬆ Back to top](#cloudflare-workers-status-page)
